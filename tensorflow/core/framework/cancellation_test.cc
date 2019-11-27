@@ -115,4 +115,88 @@ TEST(Cancellation, IsCancelled) {
   delete cm;
 }
 
+TEST(Cancellation, TryDeregisterWithoutCancel) {
+  bool is_cancelled = false;
+  CancellationManager* manager = new CancellationManager();
+  auto token = manager->get_cancellation_token();
+  bool registered = manager->RegisterCallback(
+      token, [&is_cancelled]() { is_cancelled = true; });
+  EXPECT_TRUE(registered);
+  bool deregistered = manager->TryDeregisterCallback(token);
+  EXPECT_TRUE(deregistered);
+  delete manager;
+  EXPECT_FALSE(is_cancelled);
+}
+
+TEST(Cancellation, TryDeregisterAfterCancel) {
+  bool is_cancelled = false;
+  CancellationManager* manager = new CancellationManager();
+  auto token = manager->get_cancellation_token();
+  bool registered = manager->RegisterCallback(
+      token, [&is_cancelled]() { is_cancelled = true; });
+  EXPECT_TRUE(registered);
+  manager->StartCancel();
+  EXPECT_TRUE(is_cancelled);
+  bool deregistered = manager->TryDeregisterCallback(token);
+  EXPECT_FALSE(deregistered);
+  delete manager;
+}
+
+TEST(Cancellation, TryDeregisterDuringCancel) {
+  Notification cancel_started, finish_callback, cancel_complete;
+  CancellationManager* manager = new CancellationManager();
+  auto token = manager->get_cancellation_token();
+  bool registered = manager->RegisterCallback(token, [&]() {
+    cancel_started.Notify();
+    finish_callback.WaitForNotification();
+  });
+  EXPECT_TRUE(registered);
+
+  thread::ThreadPool w(Env::Default(), "test", 1);
+  w.Schedule([&]() {
+    manager->StartCancel();
+    cancel_complete.Notify();
+  });
+  cancel_started.WaitForNotification();
+
+  bool deregistered = manager->TryDeregisterCallback(token);
+  EXPECT_FALSE(deregistered);
+
+  finish_callback.Notify();
+  cancel_complete.WaitForNotification();
+  delete manager;
+}
+
+TEST(Cancellation, Parent_CancelManyChildren) {
+  CancellationManager parent;
+  std::vector<std::unique_ptr<CancellationManager>> children;
+  for (size_t i = 0; i < 5; ++i) {
+    children.push_back(absl::make_unique<CancellationManager>(&parent));
+    EXPECT_FALSE(children.back()->IsCancelled());
+  }
+  parent.StartCancel();
+  for (auto& child : children) {
+    EXPECT_TRUE(child->IsCancelled());
+  }
+}
+
+TEST(Cancellation, Parent_NotCancelled) {
+  CancellationManager parent;
+  {
+    CancellationManager child(&parent);
+    child.StartCancel();
+    EXPECT_TRUE(child.IsCancelled());
+  }
+  EXPECT_FALSE(parent.IsCancelled());
+}
+
+TEST(Cancellation, Parent_AlreadyCancelled) {
+  CancellationManager parent;
+  parent.StartCancel();
+  EXPECT_TRUE(parent.IsCancelled());
+
+  CancellationManager child(&parent);
+  EXPECT_TRUE(child.IsCancelled());
+}
+
 }  // namespace tensorflow

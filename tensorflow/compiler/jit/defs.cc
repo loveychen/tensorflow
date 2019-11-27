@@ -19,4 +19,11 @@ namespace tensorflow {
 
 const char* const kXlaCompileAttr = "_XlaCompile";
 
+// User-provided through jit_scope APIs. Effective only when auto_jit is OFF.
+const char* const kXlaScopeAttr = "_XlaScope";
+
+// Automatically inserted by auto_jit to guide clustering results.  Effective
+// only when auto_jit is ON.
+const char* const kXlaInternalScopeAttr = "_XlaInternalScope";
+
 }  // namespace tensorflow

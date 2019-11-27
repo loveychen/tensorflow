@@ -1,3 +1,4 @@
+# Lint as: python2, python3
 # Copyright 2017 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,21 +22,23 @@ from __future__ import print_function
 
 import os
 import re
+import six
 
 
 def md_files_in_dir(py_guide_src_dir):
   """Returns a list of filename (full_path, base) pairs for guide files."""
   all_in_dir = [(os.path.join(py_guide_src_dir, f), f)
                 for f in os.listdir(py_guide_src_dir)]
-  return [(full, f) for full, f in all_in_dir
-          if os.path.isfile(full) and f.endswith('.md')]
+  return [(full, f)
+          for full, f in all_in_dir
+          if os.path.isfile(full) and six.ensure_str(f).endswith('.md')]
 
 
 class PyGuideParser(object):
   """Simple parsing of a guide .md file.
 
-  Decendents can override the process_*() functions (called by process())
-  to either record infromation from the guide, or call replace_line()
+  Descendants can override the process_*() functions (called by process())
+  to either record information from the guide, or call replace_line()
   to affect the return value of process().
   """
 
@@ -44,7 +47,8 @@ class PyGuideParser(object):
 
   def process(self, full_path):
     """Read and process the file at `full_path`."""
-    md_string = open(full_path).read()
+    with open(full_path, 'rb') as f:
+      md_string = f.read().decode('utf-8')
     self._lines = md_string.split('\n')
     seen = set()
 

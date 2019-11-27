@@ -18,6 +18,7 @@ limitations under the License.
 
 #include "tensorflow/core/lib/io/path.h"
 #include "tensorflow/core/platform/file_system.h"
+#include "tensorflow/core/platform/platform.h"
 
 #ifdef PLATFORM_WINDOWS
 #undef DeleteFile
@@ -63,18 +64,16 @@ class WindowsFileSystem : public FileSystem {
 
   Status RenameFile(const string& src, const string& target) override;
 
-  string TranslateName(const string& name) const override {
-    return name;
-  }
+  string TranslateName(const string& name) const override { return name; }
 };
 
 class LocalWinFileSystem : public WindowsFileSystem {
-public:
-    string TranslateName(const string& name) const override {
-      StringPiece scheme, host, path;
-      io::ParseURI(name, &scheme, &host, &path);
-      return path.ToString();
-    }
+ public:
+  string TranslateName(const string& name) const override {
+    StringPiece scheme, host, path;
+    io::ParseURI(name, &scheme, &host, &path);
+    return string(path);
+  }
 };
 
 }  // namespace tensorflow

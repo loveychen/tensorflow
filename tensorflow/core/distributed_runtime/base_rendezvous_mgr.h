@@ -21,6 +21,7 @@ limitations under the License.
 
 #include "tensorflow/core/distributed_runtime/rendezvous_mgr_interface.h"
 #include "tensorflow/core/distributed_runtime/worker_env.h"
+#include "tensorflow/core/distributed_runtime/worker_session.h"
 #include "tensorflow/core/framework/control_flow.h"
 #include "tensorflow/core/framework/rendezvous.h"
 #include "tensorflow/core/lib/core/status.h"
@@ -59,12 +60,16 @@ class BaseRecvTensorCall;
 class BaseRendezvousMgr : public RendezvousMgrInterface {
  public:
   explicit BaseRendezvousMgr(const WorkerEnv* worker_env);
+
   ~BaseRendezvousMgr() override;
 
   // Returns Rendezvous supporting send and recv among workers in the
   // "step_id".  The caller takes ownership of one reference on the
   // returned Rendezvous instance.
-  Rendezvous* Find(int64 step_id) override;
+  //
+  // Note: the caller must guarantee to eventually call Initialize on the
+  // returned RemoteRendezvous
+  RemoteRendezvous* Find(int64 step_id) override;
 
   // Finds the local rendezvous instance for the "step_id".  Runs
   // "done" when the tensor for "key" is produced or an error occurs.
@@ -111,10 +116,12 @@ class BaseRendezvousMgr : public RendezvousMgrInterface {
 // Buffering of Tensor values is delegated to a "local" Rendezvous
 // obtained from NewLocalRendezvous().  This class just adds
 // functionality to coordinate with remote workers.
-class BaseRemoteRendezvous : public Rendezvous {
+class BaseRemoteRendezvous : public RemoteRendezvous {
  public:
-  BaseRemoteRendezvous(const WorkerEnv* env, int64 step_id,
-                       bool tolerate_dup_recv);
+  BaseRemoteRendezvous(const WorkerEnv* env, int64 step_id);
+
+  // Upgrades the BaseRemoteRendezvous to full initialization.
+  Status Initialize(WorkerSession* session) override;
 
   // Forwards to local_, where the Tensor "val" will be buffered and
   // any waiting callback stored.
@@ -153,10 +160,14 @@ class BaseRemoteRendezvous : public Rendezvous {
                             DeviceNameUtils::ParsedName dst);
 
   // If aborted, aborts "call". Otherwise, adds "call" into active_.
-  void RegisterCall(BaseRecvTensorCall* call);
+  void RegisterCall(BaseRecvTensorCall* call, const Rendezvous::Args& args);
 
   // Removes "call" from active_ if "call" is in active_.
   void DeregisterCall(BaseRecvTensorCall* call);
+
+  WorkerSession* session();
+
+  bool is_initialized();
 
   ~BaseRemoteRendezvous() override;
 
@@ -166,13 +177,34 @@ class BaseRemoteRendezvous : public Rendezvous {
  private:
   Rendezvous* local_;  // Owns a Ref on this object.
 
-  mutable mutex mu_;
+  // Guards mutable state that is read-mostly after this rendezvous is
+  // initialized.
+  mutable mutex init_mu_;
 
   // Status given by StartAbort() if any.
-  Status status_ GUARDED_BY(mu_);
+  Status status_ GUARDED_BY(init_mu_);
+
+  WorkerSession* session_ GUARDED_BY(init_mu_);  // Not owned.
+
+  // Data structures to handle calls when partially initialized.
+  struct DeferredCall {
+    const ParsedKey parsed;
+    DoneCallback done;
+
+    DeferredCall(const ParsedKey& parsed, DoneCallback done);
+  };
+  std::vector<DeferredCall> deferred_calls_ GUARDED_BY(init_mu_);
+
+  typedef std::function<void()> InactiveCallback;
 
   // Active outstanding RecvTensor calls.
-  gtl::FlatSet<BaseRecvTensorCall*> active_ GUARDED_BY(mu_);
+  mutex active_mu_;
+  std::unordered_map<BaseRecvTensorCall*, InactiveCallback> active_
+      GUARDED_BY(active_mu_);
+
+  bool is_initialized_locked() SHARED_LOCKS_REQUIRED(init_mu_) {
+    return session_ != nullptr;
+  }
 
   // If "is_src" is true, checks that the rendezvous key "parsed"'s
   // source is in this process. If "is_src" is false, checks that the
@@ -187,6 +219,9 @@ class BaseRemoteRendezvous : public Rendezvous {
                           const Rendezvous::Args& in_args,
                           const Rendezvous::Args& out_args, const Tensor& in,
                           Tensor* out, StatusCallback done);
+
+  // Must be called only if fully initialized.
+  void RecvLocalAsyncInternal(const ParsedKey& parsed, DoneCallback done);
 
   TF_DISALLOW_COPY_AND_ASSIGN(BaseRemoteRendezvous);
 };

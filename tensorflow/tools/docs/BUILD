@@ -1,21 +1,28 @@
 # Description:
 #   Doc generator
 
-licenses(["notice"])  # Apache 2.0
-
-exports_files(["LICENSE"])
+load("//tensorflow:tensorflow.bzl", "py_test")
 
 package(
     default_visibility = ["//tensorflow:__subpackages__"],
+    licenses = ["notice"],  # Apache 2.0
 )
 
-load("//tensorflow:tensorflow.bzl", "py_test")
+exports_files(["LICENSE"])
 
-py_binary(
-    name = "gen_cc_md",
-    srcs = ["gen_cc_md.py"],
-    srcs_version = "PY2AND3",
-    deps = ["//tensorflow:tensorflow_py"],
+py_test(
+    name = "tf_doctest",
+    srcs = ["tf_doctest.py"],
+    python_version = "PY3",
+    tags = [
+        "no_oss_py2",
+        "noasan",
+        "nomsan",
+        "notsan",
+    ],
+    deps = [
+        "//tensorflow:tensorflow_py",
+    ],
 )
 
 py_library(
@@ -24,6 +31,7 @@ py_library(
         "doc_generator_visitor.py",
     ],
     srcs_version = "PY2AND3",
+    deps = ["@six_archive//:six"],
 )
 
 py_test(
@@ -32,30 +40,95 @@ py_test(
     srcs = [
         "doc_generator_visitor_test.py",
     ],
+    python_version = "PY3",
     srcs_version = "PY2AND3",
     deps = [
         ":doc_generator_visitor",
+        ":generate_lib",
+        "//tensorflow/python:platform_test",
+        "@six_archive//:six",
+    ],
+)
+
+py_library(
+    name = "doc_controls",
+    srcs = ["doc_controls.py"],
+    srcs_version = "PY2AND3",
+    visibility = ["//visibility:public"],
+)
+
+py_test(
+    name = "doc_controls_test",
+    size = "small",
+    srcs = ["doc_controls_test.py"],
+    python_version = "PY3",
+    srcs_version = "PY2AND3",
+    deps = [
+        ":doc_controls",
         "//tensorflow/python:platform_test",
     ],
 )
 
 py_library(
     name = "parser",
-    srcs = [
-        "parser.py",
-    ],
+    srcs = ["parser.py"],
     srcs_version = "PY2AND3",
+    visibility = ["//visibility:public"],
+    deps = [
+        ":doc_controls",
+        "//tensorflow/python:platform",
+        "//tensorflow/python:util",
+        "@astor_archive//:astor",
+        "@six_archive//:six",
+    ],
 )
 
 py_test(
     name = "parser_test",
     size = "small",
-    srcs = [
-        "parser_test.py",
-    ],
+    srcs = ["parser_test.py"],
+    python_version = "PY3",
     srcs_version = "PY2AND3",
-    tags = ["manual"],
     deps = [
+        ":parser",
+        "//tensorflow/python:platform_test",
+        "@six_archive//:six",
+    ],
+)
+
+py_library(
+    name = "pretty_docs",
+    srcs = ["pretty_docs.py"],
+    srcs_version = "PY2AND3",
+    deps = ["@six_archive//:six"],
+)
+
+py_library(
+    name = "generate_lib",
+    srcs = ["generate_lib.py"],
+    srcs_version = "PY2AND3",
+    visibility = ["//visibility:public"],
+    deps = [
+        ":doc_controls",
+        ":doc_generator_visitor",
+        ":parser",
+        ":pretty_docs",
+        ":py_guide_parser",
+        "//tensorflow/python:util",
+        "//tensorflow/tools/common:public_api",
+        "//tensorflow/tools/common:traverse",
+        "@six_archive//:six",
+    ],
+)
+
+py_test(
+    name = "generate_lib_test",
+    size = "small",
+    srcs = ["generate_lib_test.py"],
+    python_version = "PY3",
+    srcs_version = "PY2AND3",
+    deps = [
+        ":generate_lib",
         ":parser",
         "//tensorflow/python:platform_test",
     ],
@@ -64,93 +137,73 @@ py_test(
 py_binary(
     name = "generate",
     srcs = ["generate.py"],
+    python_version = "PY3",
     srcs_version = "PY2AND3",
     deps = [
-        ":doc_generator_visitor",
-        ":parser",
-        ":py_guide_parser",
+        ":generate_lib",
         "//tensorflow:tensorflow_py",
-        "//tensorflow/contrib/ffmpeg:ffmpeg_ops_py",
+        "//tensorflow/python:util",
         "//tensorflow/python/debug:debug_py",
-        "//tensorflow/tools/common:public_api",
-        "//tensorflow/tools/common:traverse",
     ],
 )
 
 py_test(
-    name = "generate_test",
-    size = "small",
-    srcs = [
-        "generate_test.py",
-    ],
+    name = "generate2_test",
+    size = "medium",
+    srcs = ["generate2_test.py"],
+    python_version = "PY3",
     srcs_version = "PY2AND3",
-    tags = ["manual"],
+    tags = [
+        "manual",
+        # No reason to run sanitizers or fastbuild for this test.
+        "noasan",
+        "nomsan",
+        "notsan",
+        "optonly",
+        "notap",
+    ],
     deps = [
-        ":generate",
-        "//tensorflow/python:platform_test",
+        ":generate2_lib",
+    ],
+)
+
+py_binary(
+    name = "generate2",
+    srcs = ["generate2.py"],
+    python_version = "PY3",
+    srcs_version = "PY2AND3",
+    deps = [
+        ":generate2_lib",
+        "@six_archive//:six",
+    ],
+)
+
+py_library(
+    name = "generate2_lib",
+    srcs = ["generate2.py"],
+    srcs_version = "PY2AND3",
+    deps = [
+        "//tensorflow:tensorflow_py",
+        "//tensorflow/python:util",
     ],
 )
 
 py_library(
     name = "py_guide_parser",
-    srcs = [
-        "py_guide_parser.py",
-    ],
+    srcs = ["py_guide_parser.py"],
     srcs_version = "PY2AND3",
+    deps = ["@six_archive//:six"],
 )
 
 py_test(
     name = "py_guide_parser_test",
     size = "small",
-    srcs = [
-        "py_guide_parser_test.py",
-    ],
+    srcs = ["py_guide_parser_test.py"],
+    python_version = "PY3",
     srcs_version = "PY2AND3",
     deps = [
         ":py_guide_parser",
         "//tensorflow/python:client_testlib",
+        "@six_archive//:six",
     ],
-)
-
-filegroup(
-    name = "doxy_config",
-    srcs = ["tf-doxy_for_md-config"],
-)
-
-sh_binary(
-    name = "gen_docs",
-    srcs = ["gen_docs.sh"],
-    data = [
-        ":doxy_config",
-        ":gen_cc_md",
-        "//tensorflow/python:gen_docs_combined",
-    ],
-)
-
-sh_test(
-    name = "gen_docs_test",
-    size = "small",
-    srcs = [
-        "gen_docs_test.sh",
-    ],
-    data = [
-        ":gen_docs",
-        "//tensorflow/core:all_files",
-        "//tensorflow/python:all_files",
-    ],
-    tags = [
-        "manual",
-        "notap",
-    ],
-)
-
-filegroup(
-    name = "all_files",
-    srcs = glob(
-        ["**/*"],
-        exclude = [
-            "**/METADATA",
-            "**/OWNERS",
-        ],
-    ),
 )

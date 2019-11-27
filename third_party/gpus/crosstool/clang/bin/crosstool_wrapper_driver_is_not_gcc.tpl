@@ -49,11 +49,16 @@ import pipes
 CPU_COMPILER = ('%{cpu_compiler}')
 GCC_HOST_COMPILER_PATH = ('%{gcc_host_compiler_path}')
 
-CURRENT_DIR = os.path.dirname(sys.argv[0])
-NVCC_PATH = CURRENT_DIR + '/../../../cuda/bin/nvcc'
-LLVM_HOST_COMPILER_PATH = ('/usr/bin/gcc')
+NVCC_PATH = '%{nvcc_path}'
 PREFIX_DIR = os.path.dirname(GCC_HOST_COMPILER_PATH)
 NVCC_VERSION = '%{cuda_version}'
+
+
+# TODO(amitpatankar): Benchmark enabling all capabilities by default.
+# Environment variable for supported TF CUDA Compute Capabilities
+# eg. export TF_CUDA_COMPUTE_CAPABILITIES=3.5,3.7,5.2,6.0,6.1,7.0
+CUDA_COMPUTE_ENV_VAR = 'TF_CUDA_COMPUTE_CAPABILITIES'
+DEFAULT_CUDA_COMPUTE_CAPABILITIES = '3.5,6.0'
 
 def Log(s):
   print('gpus/crosstool: {0}'.format(s))
@@ -97,6 +102,7 @@ def GetHostCompilerOptions(argv):
   parser.add_argument('--sysroot', nargs=1)
   parser.add_argument('-g', nargs='*', action='append')
   parser.add_argument('-fno-canonical-system-headers', action='store_true')
+  parser.add_argument('-no-canonical-prefixes', action='store_true')
 
   args, _ = parser.parse_known_args(argv)
 
@@ -110,6 +116,8 @@ def GetHostCompilerOptions(argv):
     opts += ' -g' + ' -g'.join(sum(args.g, []))
   if args.fno_canonical_system_headers:
     opts += ' -fno-canonical-system-headers'
+  if args.no_canonical_prefixes:
+    opts += ' -no-canonical-prefixes'
   if args.sysroot:
     opts += ' --sysroot ' + args.sysroot[0]
 
@@ -177,13 +185,18 @@ def InvokeNvcc(argv, log=False):
   # any other reliable way to just get the list of source files to be compiled.
   src_files = GetOptionValue(argv, 'c')
 
+  # Pass -w through from host to nvcc, but don't do anything fancier with
+  # warnings-related flags, since they're not necessarily the same across
+  # compilers.
+  warning_options = ' -w' if '-w' in argv else ''
+
   if len(src_files) == 0:
     return 1
   if len(out_file) != 1:
     return 1
 
   opt = (' -O2' if (len(opt_option) > 0 and int(opt_option[0]) > 0)
-         else ' -g -G')
+         else ' -g')
 
   includes = (' -I ' + ' -I '.join(include_options)
               if len(include_options) > 0
@@ -207,6 +220,7 @@ def InvokeNvcc(argv, log=False):
   nvccopts += defines
   nvccopts += std_options
   nvccopts += m_options
+  nvccopts += warning_options
 
   if depfiles:
     # Generate the dependency file
@@ -215,7 +229,7 @@ def InvokeNvcc(argv, log=False):
            ' --compiler-options "' + host_compiler_options + '"' +
            ' --compiler-bindir=' + GCC_HOST_COMPILER_PATH +
            ' -I .' +
-           ' -x cu ' + includes + ' ' + srcs + ' -M -o ' + depfile)
+           ' -x cu ' + opt + includes + ' ' + srcs + ' -M -o ' + depfile)
     if log: Log(cmd)
     exit_status = os.system(cmd)
     if exit_status != 0:
@@ -229,7 +243,7 @@ def InvokeNvcc(argv, log=False):
 
   # TODO(zhengxq): for some reason, 'gcc' needs this help to find 'as'.
   # Need to investigate and fix.
-  cmd = 'PATH=' + PREFIX_DIR + ' ' + cmd
+  cmd = 'PATH=' + PREFIX_DIR + ':$PATH ' + cmd
   if log: Log(cmd)
   return os.system(cmd)
 

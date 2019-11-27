@@ -13,8 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_COMMON_RUNTIME_RENDEZVOUS_MGR_H_
-#define TENSORFLOW_COMMON_RUNTIME_RENDEZVOUS_MGR_H_
+#ifndef TENSORFLOW_CORE_COMMON_RUNTIME_RENDEZVOUS_MGR_H_
+#define TENSORFLOW_CORE_COMMON_RUNTIME_RENDEZVOUS_MGR_H_
 
 #include <string>
 #include <unordered_map>
@@ -59,18 +59,7 @@ class IntraProcessRendezvous : public Rendezvous {
   const DeviceMgr* device_mgr_;
   Rendezvous* local_;  // Owns a Ref on this object.
 
-  mutable mutex mu_;
-
-  // Status given by StartAbort() if any.
-  Status status_ GUARDED_BY(mu_);
-
   ~IntraProcessRendezvous() override;
-
-  // Parses "key" into "parsed". If "is_src" is true, checks that the
-  // rendezvous key's source is in this process. If "is_src" is false,
-  // checks that the rendezvous key's destination is in this process.
-  Status ParseKey(const string& key, bool is_src,
-                  Rendezvous::ParsedKey* parsed);
 
   // Callback handling the case when a rendezvous has been
   // accomplished in local_ and the consumer is local to this process.
@@ -87,4 +76,4 @@ class IntraProcessRendezvous : public Rendezvous {
 
 }  // end namespace tensorflow
 
-#endif  // TENSORFLOW_COMMON_RUNTIME_RENDEZVOUS_MGR_H_
+#endif  // TENSORFLOW_CORE_COMMON_RUNTIME_RENDEZVOUS_MGR_H_
