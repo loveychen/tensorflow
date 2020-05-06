@@ -61,10 +61,7 @@ public abstract class TensorBuffer {
    * TensorBuffer tensorBuffer = TensorBuffer.createFixedSize(shape, DataType.UINT8);
    * </pre>
    *
-   * <p>The size of a fixed-size TensorBuffer cannot be changed once it is created. However, loading
-   * arraies or data buffers of the same buffer size but different shapes is allowed.
-   *
-   * <p>TODO(b/139782181): Shall we make it fixed-size or fixed-shape?
+   * <p>The size of a fixed-size TensorBuffer cannot be changed once it is created.
    *
    * @param shape The shape of the {@link TensorBuffer} to be created.
    * @param dataType The dataType of the {@link TensorBuffer} to be created.
@@ -87,7 +84,7 @@ public abstract class TensorBuffer {
    * Creates an empty dynamic {@link TensorBuffer} with specified {@link DataType}. The shape of the
    * created {@link TensorBuffer} is {0}.
    *
-   * <p>Dynamic TensorBuffers will reallocate memory when Loading arraies or data buffers of
+   * <p>Dynamic TensorBuffers will reallocate memory when loading arrays or data buffers of
    * different buffer sizes.
    *
    * @param dataType The dataType of the {@link TensorBuffer} to be created.
@@ -162,6 +159,24 @@ public abstract class TensorBuffer {
   public abstract float[] getFloatArray();
 
   /**
+   * Returns a float value at a given index. If the buffer is of different types than float, the
+   * value will be converted into float. For example, when reading a value from {@link
+   * TensorBufferUint8}, the value will be first read out as uint8, and then will be converted from
+   * uint8 to float.
+   *
+   * <pre>
+   * For example, a TensorBuffer with shape {2, 3} that represents the following array,
+   * [[0.0f, 1.0f, 2.0f], [3.0f, 4.0f, 5.0f]].
+   *
+   * The fourth element (whose value is 3.0f) in the TensorBuffer can be retrived by:
+   * float v = tensorBuffer.getFloatValue(3);
+   * </pre>
+   *
+   * @param absIndex The absolute index of the value to be read.
+   */
+  public abstract float getFloatValue(int absIndex);
+
+  /**
    * Returns an int array of the values stored in this buffer. If the buffer is of different type
    * than int, the values will be converted into int, and loss of precision may apply. For example,
    * getting an int array from a {@link TensorBufferFloat} with values {400.32f, 23.04f}, the output
@@ -171,12 +186,31 @@ public abstract class TensorBuffer {
   public abstract int[] getIntArray();
 
   /**
+   * Returns an int value at a given index. If the buffer is of different types than int, the value
+   * will be converted into int. For example, when reading a value from {@link TensorBufferFloat},
+   * the value will be first read out as float, and then will be converted from float to int. Loss
+   * of precision may apply.
+   *
+   * <pre>
+   * For example, a TensorBuffer with shape {2, 3} that represents the following array,
+   * [[0.0f, 1.0f, 2.0f], [3.0f, 4.0f, 5.0f]].
+   *
+   * The fourth element (whose value is 3.0f) in the TensorBuffer can be retrived by:
+   * int v = tensorBuffer.getIntValue(3);
+   * Note that v is converted from 3.0f to 3 as a result of type conversion.
+   * </pre>
+   *
+   * @param absIndex The absolute index of the value to be read.
+   */
+  public abstract int getIntValue(int absIndex);
+
+  /**
    * Returns the number of bytes of a single element in the array. For example, a float buffer will
    * return 4, and a byte buffer will return 1.
    */
   public abstract int getTypeSize();
 
-  /** Returns if the TensorBuffer is dynamic sized (could resize arbitrarily). */
+  /** Returns if the {@link TensorBuffer} is dynamic sized (could resize arbitrarily). */
   public boolean isDynamic() {
     return isDynamic;
   }
@@ -326,14 +360,14 @@ public abstract class TensorBuffer {
       allocateMemory(shape);
     } else {
       // Make sure the new shape fits the buffer size when TensorBuffer has fixed size.
-      SupportPreconditions.checkArgument(flatSize == computeFlatSize(shape));
+      SupportPreconditions.checkArgument(Arrays.equals(shape, this.shape));
       this.shape = shape.clone();
     }
   }
 
   /**
    * Allocates buffer with corresponding size of the {@code shape}. If shape is an empty array, this
-   * TensorBuffer will be created as a scalar and its flatSize will be 1.
+   * {@link TensorBuffer} will be created as a scalar and its flatSize will be 1.
    *
    * @throws NullPointerException if {@code shape} is null.
    * @throws IllegalArgumentException if {@code shape} has negative elements.
@@ -366,7 +400,7 @@ public abstract class TensorBuffer {
       return true;
     }
 
-    // This shape refers to a multidimentional array.
+    // This shape refers to a multidimensional array.
     for (int s : shape) {
       // All elements in shape should be non-negative.
       if (s < 0) {

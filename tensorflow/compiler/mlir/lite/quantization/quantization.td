@@ -20,22 +20,7 @@ limitations under the License.
 #define TF_Quantization
 
 include "mlir/IR/OpBase.td"
-include "mlir/Dialect/QuantOps/QuantPredicates.td"
-
-
-//===----------------------------------------------------------------------===//
-// Min-max range pair definitions.
-//===----------------------------------------------------------------------===//
-
-// A pair of floating point values which defines the min and max of a value
-// range for quantization. The attribute is allowed to be empty or
-// have 2 elements.
-def MinMaxAttr : Attr<Or<[CPred<"$_self.cast<ArrayAttr>().size() == 0">,
-                             CPred<"$_self.cast<ArrayAttr>().size() == 2">]>,
-                      "min-max range pair"> {
-  let storageType = [{ ArrayAttr }];
-  let returnType = [{ ArrayRef<Attribute> }];
-}
+include "mlir/Dialect/Quant/QuantOpsBase.td"
 
 //===----------------------------------------------------------------------===//
 // QuantizedType definitions.
@@ -102,7 +87,7 @@ class AffineOpCoefficient<int dim, int index> : NativeOpTrait<
              StrJoinInt<[dim, index]>.result,
              ">::Impl")>;
 
-// Specify this trait if the op doesn't have quantizable ouput. We shouldn't
+// Specify this trait if the op doesn't have quantizable output. We shouldn't
 // apply quantization on this op.
 def NoQuantizableResult : NativeOpTrait<"quant::NoQuantizableResult">;
 

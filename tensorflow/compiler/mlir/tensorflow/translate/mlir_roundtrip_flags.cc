@@ -33,19 +33,16 @@ limitations under the License.
 namespace tensorflow {
 
 Status ParseOutputArrayInfo(absl::string_view array_names,
-                            absl::flat_hash_set<string>* array,
-                            std::vector<string>* order) {
+                            std::vector<string>* outputs) {
   std::vector<string> output_names = absl::StrSplit(array_names, ',');
-  return ParseOutputArrayInfo(output_names, array, order);
+  return ParseOutputArrayInfo(output_names, outputs);
 }
 
 Status ParseOutputArrayInfo(const std::vector<string>& output_names,
-                            absl::flat_hash_set<string>* array,
-                            std::vector<string>* order) {
+                            std::vector<string>* outputs) {
   for (auto& output_name : output_names) {
     if (output_name.empty()) continue;
-    array->insert(string(*absl::StrSplit(output_name, ':').begin()));
-    order->push_back(output_name);
+    outputs->push_back(output_name);
   }
   return Status::OK();
 }
@@ -84,7 +81,7 @@ Status ParseInputArrayInfo(const std::vector<string>& node_names,
     // using the type from the graph.
     used_node_dtypes.resize(node_names.size(), DataType_Name(DT_INVALID));
   } else if (node_names.size() == node_dtypes.size()) {
-    for (auto dtype : node_dtypes) {
+    for (const auto& dtype : node_dtypes) {
       if (dtype.empty()) {
         used_node_dtypes.push_back(DataType_Name(DT_INVALID));
       } else if (dtype != DataType_Name(DT_INVALID)) {
